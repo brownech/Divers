@@ -1,0 +1,240 @@
+<!DOCTYPE aesl-source>
+<network>
+
+
+<!--list of global events-->
+
+
+<!--list of constants-->
+<constant value="13" name="NOTETIME"/>
+<constant value="13" name="NBOFNOTES"/>
+<constant value="50" name="TIMER0"/>
+<constant value="30" name="TIMER1"/>
+<constant value="32" name="MAXLED"/>
+<constant value="80" name="MOTORCOUNTER"/>
+<constant value="100" name="MOTORSPEED"/>
+<constant value="10" name="PROXVTIME"/>
+
+
+<!--show keywords state-->
+<keywords flag="true"/>
+
+
+<!--node thymio-II-->
+<node nodeId="1" name="thymio-II">
+
+var state = 0
+var counter1 = 0 #leds.top
+var counter2 = 0 #leds.circle
+var counter3 = 0 #leds.buttons
+var counter4 = 0 #front left and front right leds
+var counter5 = 0 #motors
+var counter6 = 0 #music
+var counter7 = 0
+var playingmusic = 0
+var increment = 1
+var circleled[8] = [0,0,0,0,0,0,0,0]
+var buttonled[4] = [0,0,0,0]
+var proxled[8] = [0,0,0,0,0,0,0,0]
+var randfactor = 32767/8
+var x = 0
+
+
+# variables for notes
+var notes[NBOFNOTES]
+var durations[NBOFNOTES]
+var note_index = 13
+var wave[142]
+var i
+var angle
+var cos_result
+
+sub initialize
+	#call sound.system(1)
+	state = 1
+	timer.period[0] = TIMER0
+	timer.period[1] = TIMER1
+	
+	
+sub kill
+	timer.period[0] = 0
+	timer.period[1] = 0
+	state = 0
+	call sound.system(-1)
+	call leds.circle(0,0,0,0,0,0,0,0)
+	call leds.buttons(0,0,0,0)
+	call leds.top(0,0,0)
+	call leds.bottom.left(0,0,0)
+	call leds.bottom.right(0,0,0)
+	call leds.temperature(0,0)
+	call leds.prox.h(0,0,0,0,0,0,0,0)
+	call leds.prox.v(0,0)
+	call leds.rc(0)
+	call leds.sound(0)
+	motor.left.target = 0
+	motor.right.target = 0
+
+sub writearray
+	for i in 0:7 do
+		circleled[i] = 0
+		proxled[i] = 0
+	end
+	
+	circleled[counter2] = MAXLED
+	
+	call math.rand(x)
+	x = x / randfactor
+	if x &lt; 0 then
+		x = -x
+	end
+
+	proxled[x] = MAXLED
+	
+	for i in 0:3 do
+		buttonled[i] = 0
+	end
+	
+	if counter3 == 0 then
+		buttonled[0] = MAXLED
+	elseif counter3 == 1 then
+		buttonled[2] = MAXLED
+	elseif counter3 == 2 then
+		buttonled[1] = MAXLED
+	elseif counter3 == 3 then
+		buttonled[3] = MAXLED
+	end
+	
+sub incrementcounters
+	if increment == 1 then
+		counter1++
+	else
+		counter1--
+	end
+	if counter2 &lt; 7 then
+		counter2++
+	else
+		counter2 = 0
+	end
+	#slow counter3 down
+	if counter2 == 0 or counter2 == 4 then
+		if counter3 &lt; 3 then
+			counter3++
+		else
+			counter3 = 0
+		end
+	end
+	if counter5 &lt; MOTORCOUNTER then
+		counter5++
+	else
+		counter5 = 0
+	end
+	
+	if counter6 &lt; PROXVTIME then
+		counter6++
+	else
+		counter6 = 0
+	end
+	
+
+# compute a sinus wave for sound
+for i in 0:141 do
+	angle = (i-70)*468
+	call math.cos(cos_result, angle)
+	wave[i] = cos_result/256
+end
+call sound.wave(wave)
+call sound.system(-1)
+call leds.top(0,0,0)
+call leds.bottom.left(0,0,0)
+call leds.bottom.right(0,0,0)
+call leds.circle(0,0,0,0,0,0,0,0)
+
+onevent sound.finished
+	if note_index != NBOFNOTES then
+		call sound.freq(notes[note_index], durations[note_index])
+		note_index += 1
+	end
+
+onevent buttons
+	if button.center == 1 then
+		if state != 0 then
+			callsub kill
+		else
+			callsub kill
+			callsub initialize
+			
+				#*call math.copy(notes, [330, 330, 330, 660, 932, 988, 932, 740, 932, 880, 698, 880, 831])
+	call math.copy(durations, [NOTETIME, NOTETIME, NOTETIME, NOTETIME, NOTETIME, NOTETIME, NOTETIME*2, NOTETIME, NOTETIME, NOTETIME*2, NOTETIME, NOTETIME, NOTETIME*2])
+	call sound.freq(notes[0], durations[0])
+	note_index = 1*#
+	
+		end
+	end
+
+onevent timer1
+	#initialize counter2
+	when state == 1 do
+		counter1 = 0
+		counter2 = 0
+	end
+	
+	#increment or decrement counters
+	if state == 1 then
+		callsub incrementcounters
+		callsub writearray
+		call leds.top(counter1,0,0)
+	end
+	
+	#change top LEDs intensity UP or DOWN
+	if counter1 >= MAXLED then
+		increment = 0
+	elseif counter1 &lt;= 0 then
+		increment = 1
+	end
+	
+	if counter4 == 0 then
+		counter4 = 1
+		call leds.bottom.left(0,0,0)
+		call leds.bottom.right(MAXLED, MAXLED, MAXLED)
+	elseif counter4 == 1 then
+		counter4 = 0
+		call leds.bottom.left(MAXLED, MAXLED, MAXLED)
+		call leds.bottom.right(0,0,0)
+	end
+	
+	#color circle
+	call leds.circle(circleled[0],circleled[1],circleled[2],circleled[3],circleled[4],circleled[5],circleled[6],circleled[7])
+	
+	#color buttonleds
+	call leds.buttons(buttonled[0],buttonled[1],buttonled[2],buttonled[3])
+	
+	#color proxleds
+	call leds.prox.h(proxled[0],proxled[1],proxled[2],proxled[3],proxled[4],proxled[5],proxled[6],proxled[7])
+	
+	#*
+	if counter5 &lt; (MOTORCOUNTER / 2) then
+		motor.left.target = MOTORSPEED
+		motor.right.target = -MOTORSPEED
+	else
+		motor.left.target = -MOTORSPEED
+		motor.right.target = MOTORSPEED
+	end
+	*#
+
+
+onevent timer0
+	if counter6 &lt; (PROXVTIME / 2) then
+		call leds.prox.v(MAXLED, MAXLED)
+	else
+		call leds.prox.v(0, 0)
+	end
+
+#*
+	call math.copy(notes, [330, 330, 330, 660, 932, 988, 932, 740, 932, 880, 698, 880, 831])
+	call math.copy(durations, [NOTETIME, NOTETIME, NOTETIME, NOTETIME, NOTETIME, NOTETIME, NOTETIME*2, NOTETIME, NOTETIME, NOTETIME*2, NOTETIME, NOTETIME, NOTETIME*2])
+	call sound.freq(notes[0], durations[0])
+	note_index = 1
+	*#</node>
+
+
+</network>

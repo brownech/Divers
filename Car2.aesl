@@ -1,0 +1,387 @@
+<!DOCTYPE aesl-source>
+<network>
+
+
+<!--list of global events-->
+
+
+<!--list of constants-->
+<constant value="10" name="FASTTIMER"/>
+<constant value="500" name="SLOWTIMER"/>
+<constant value="750" name="PROXTHRES"/>
+<constant value="200" name="FINISHSPEED"/>
+<constant value="200" name="MAXSPEED"/>
+<constant value="200" name="BLINKTIME"/>
+<constant value="2800" name="PROXSTOP"/>
+<constant value="2200" name="PROXGO"/>
+<constant value="32" name="MAXLED"/>
+<constant value="30" name="TIMERFINISH"/>
+<constant value="162" name="FINISHLOOPS"/>
+
+
+<!--show keywords state-->
+<keywords flag="true"/>
+
+
+<!--node thymio-II-->
+<node nodeId="1" name="thymio-II">#movement vars
+
+var state = 0 #0:off  1:on  2:go  3:finished!
+var oldstate = 0
+var blinker = 0 #-1:left  0:off  1:right
+var blinkerOnOff = 1
+var blinkercounter = 0
+
+##############
+#flashlight vars
+var counter1 = 0 #leds.top
+var counter2 = 0 #leds.circle
+var counter3 = 0 #leds.buttons
+var counter4 = 0 #front left and front right leds
+var counter7 = 0
+var increment = 1
+var circleled[8] = [0,0,0,0,0,0,0,0]
+var buttonled[4] = [0,0,0,0]
+var proxled[8] = [0,0,0,0,0,0,0,0]
+var randfactor = 32767/8 + 1
+var i = 0
+var x = 0
+
+##############
+#movement subs
+sub killblinkers
+	blinker = 0
+	blinkerOnOff = 1
+	call leds.circle(0,0,0,0,0,0,0,0)
+	call leds.bottom.left(0,0,0)
+	call leds.bottom.right(0,0,0)
+	call leds.prox.h(0,0,0,0,0,0,0,0)
+	
+sub killleds
+	callsub killblinkers
+	call leds.buttons(0,0,0,0)
+	call leds.top(0,0,0)
+	call leds.temperature(0,0)
+	call leds.prox.h(0,0,0,0,0,0,0,0)
+	call leds.prox.v(0,0)
+	call leds.rc(0)
+	call leds.sound(0)
+	
+sub killtimer
+	timer.period[0] = 0
+	
+sub kill
+	state = 0
+	blinker = 0
+	timer.period[0] = 0 #kill timer
+	callsub killleds
+	motor.left.target = 0
+	motor.right.target = 0
+	
+sub resettimer
+	timer.period[0] = 0
+	timer.period[0] = SLOWTIMER
+	blinkerOnOff = 1
+	
+sub initialize
+	call sound.system(-1)
+	timer.period[0] = SLOWTIMER
+	timer.period[1] = FASTTIMER
+	callsub killleds
+	call leds.buttons(1,1,1,1)
+	counter1 = 0 #leds.top
+	counter2 = 0 #leds.circle
+	counter3 = 0 #leds.buttons
+	counter4 = 0 #front left and front right leds
+	counter7 = 0
+	
+sub leftblinker
+	blinker = -1
+	callsub resettimer
+	
+sub rightblinker
+	blinker = 1
+	callsub resettimer
+	
+sub stop
+	motor.left.target = 0
+	motor.right.target = 0
+	call leds.prox.h(0,0,0,0,0,0,MAXLED,MAXLED)
+	call leds.top(MAXLED,0,0)
+	
+sub go
+	motor.left.target = MAXSPEED
+	motor.right.target = MAXSPEED
+	call leds.prox.h(0,0,0,0,0,0,0,0)
+	call leds.top(0,0,0)
+
+sub turnleft
+	motor.left.target = MAXSPEED / 5
+	motor.right.target = MAXSPEED
+	
+sub turnright
+	motor.left.target = MAXSPEED
+	motor.right.target = MAXSPEED / 5
+############
+#flashlight subs
+sub incrementcounters
+	if increment == 1 then
+		counter1++
+	else
+		counter1--
+	end
+	if counter2 &lt; 7 then
+		counter2++
+	else
+		counter2 = 0
+	end
+	#slow counter3 down
+	if counter2 == 0 or counter2 == 4 then
+		if counter3 &lt; 3 then
+			counter3++
+		else
+			counter3 = 0
+		end
+	end
+	counter7++
+	
+sub writearray
+	for i in 0:7 do
+		circleled[i] = 0
+		proxled[i] = 0
+	end
+	
+	circleled[counter2] = MAXLED
+	
+	call math.rand(x)
+	x = x / randfactor
+	if x &lt; 0 then
+		x = -x
+	end
+
+	proxled[x] = MAXLED
+	
+	for i in 0:3 do
+		buttonled[i] = 0
+	end
+	
+	if counter3 == 0 then
+		buttonled[0] = MAXLED
+	elseif counter3 == 1 then
+		buttonled[2] = MAXLED
+	elseif counter3 == 2 then
+		buttonled[1] = MAXLED
+	elseif counter3 == 3 then
+		buttonled[3] = MAXLED
+	end
+	
+sub setfinish
+timer.period[1] = TIMERFINISH
+motor.left.target = -FINISHSPEED
+motor.right.target = FINISHSPEED
+	
+###############
+#main events
+
+onevent button.center
+	when button.center == 1 do
+		call leds.buttons(4,4,4,4)
+	end
+	if state == 0 then
+		state = 1
+		callsub initialize
+	elseif state == 1 then
+		callsub killblinkers
+		callsub killtimer
+	end
+	
+onevent button.backward
+	when button.backward == 1 do
+		call leds.buttons(1,1,6,1)
+	end
+	#if state == 1 then
+		state = 0
+		callsub kill
+	#end
+	
+onevent button.left
+	when button.left == 1 do
+		call leds.buttons(1,1,1,6)
+	end
+	if state == 1 then
+		callsub killblinkers
+		blinker = -1
+		callsub resettimer
+	end
+	
+	
+onevent button.right
+	when button.right == 1 do
+		call leds.buttons(1,6,1,1)
+	end
+	if state == 1 then
+		callsub killblinkers
+		blinker = 1
+		callsub resettimer
+	end
+	
+onevent button.forward
+	state = 2
+	when button.forward == 1 do
+		call leds.buttons(6,1,1,1)
+		callsub initialize
+		callsub go
+	end
+
+#fast timer (~1ms)
+onevent timer1
+	if state != 0 then
+		blinkercounter++
+	end
+	
+	if blinkercounter > 32000 then
+		blinkercounter = (BLINKTIME + 1)
+	end
+	when button.center == 0 do
+		call leds.buttons(1,1,1,1)
+	end
+	when button.backward == 0 do
+		call leds.buttons(1,1,1,1)
+	end
+	when button.forward == 0 do
+		call leds.buttons(1,1,1,1)
+	end
+	when button.left == 0 do
+		call leds.buttons(1,1,1,1)
+	end
+	when button.right == 0 do
+		call leds.buttons(1,1,1,1)
+	end
+	if state != 0 then
+		#if rolling
+		if state == 2 then
+			#turn left
+			when prox.ground.delta[0] &lt; PROXTHRES do
+				callsub turnleft
+				if blinker != -1 then
+					callsub leftblinker
+					blinkercounter = 0
+				end
+				
+			end
+			#turn right
+			when prox.ground.delta[1] &lt; PROXTHRES do
+				callsub turnright
+				if blinker != 1 then
+					callsub rightblinker
+					blinkercounter = 0
+				end
+				
+			end
+			when prox.ground.delta[0] > PROXTHRES and prox.ground.delta[1] > PROXTHRES do
+				callsub go
+			end
+			when blinkercounter > BLINKTIME do
+				callsub killblinkers
+			end
+			if prox.horizontal[0] > PROXSTOP or prox.horizontal[1] > PROXSTOP or prox.horizontal[2] > PROXSTOP or prox.horizontal[3] > PROXSTOP or prox.horizontal[4] > PROXSTOP then
+				oldstate = state
+				callsub stop
+			end
+			when prox.horizontal[0] &lt; PROXGO and prox.horizontal[1] &lt; PROXGO and prox.horizontal[2] &lt; PROXGO and prox.horizontal[3] &lt; PROXGO and prox.horizontal[4] &lt; PROXGO do
+				state = oldstate
+				if prox.ground.delta[0] &lt; PROXTHRES then
+					callsub turnleft
+				elseif prox.ground.delta[1] &lt; PROXTHRES then
+					callsub turnright
+				else
+					callsub go
+				end
+			end
+
+		end
+		
+		when prox.ground.delta[0] &lt; PROXTHRES and prox.ground.delta[1] &lt; PROXTHRES do
+			callsub stop
+			callsub setfinish
+			state = 3
+		end
+		if state == 3 then
+		
+			######################################
+			
+			#increment or decrement counters
+			callsub incrementcounters
+			callsub writearray
+			call leds.top(counter1,0,0)
+			
+			#change top LEDs intensity UP or DOWN
+			if counter1 >= MAXLED then
+				increment = 0
+			elseif counter1 &lt;= 0 then
+				increment = 1
+			end
+			
+			if counter4 == 0 then
+				counter4 = 1
+				call leds.bottom.left(0,0,0)
+				call leds.bottom.right(MAXLED, MAXLED, MAXLED)
+			elseif counter4 == 1 then
+				counter4 = 0
+				call leds.bottom.left(MAXLED, MAXLED, MAXLED)
+				call leds.bottom.right(0,0,0)
+			end
+			
+			#color circle
+			call leds.circle(circleled[0],circleled[1],circleled[2],circleled[3],circleled[4],circleled[5],circleled[6],circleled[7])
+			
+			#color buttonleds
+			call leds.buttons(buttonled[0],buttonled[1],buttonled[2],buttonled[3])
+			
+			#color proxleds
+			call leds.prox.h(proxled[0],proxled[1],proxled[2],proxled[3],proxled[4],proxled[5],proxled[6],proxled[7])
+			######################################
+			
+			if counter7 > FINISHLOOPS then
+				callsub killleds
+				callsub stop
+				callsub initialize
+				state = 1
+			end
+		end
+	end
+
+	
+#slow timer (~500ms)
+onevent timer0
+	if blinker == -1 then
+		if blinkerOnOff == 1 then
+			blinkerOnOff = 0
+			call leds.bottom.left(32,20,0)
+			call leds.circle(0,0,0,0,0,0,32,0)
+			call leds.prox.h(0,0,0,0,0,0,8,0)
+		elseif blinkerOnOff == 0 then
+			blinkerOnOff = 1
+			call leds.bottom.left(0,0,0)
+			call leds.circle(0,0,0,0,0,0,0,0)
+			call leds.prox.h(0,0,0,0,0,0,0,0)
+		end
+	end
+	
+	if blinker == 1 then
+		if blinkerOnOff == 1 then
+			blinkerOnOff = 0
+			call leds.bottom.right(32,20,0)
+			call leds.circle(0,0,32,0,0,0,0,0)
+			call leds.prox.h(0,0,0,0,0,0,0,8)
+		elseif blinkerOnOff == 0 then
+			blinkerOnOff = 1
+			call leds.bottom.right(0,0,0)
+			call leds.circle(0,0,0,0,0,0,0,0)
+			call leds.prox.h(0,0,0,0,0,0,0,0)
+		end
+	end
+</node>
+
+
+</network>

@@ -1,0 +1,62 @@
+<!DOCTYPE aesl-source>
+<network>
+
+
+<!--list of global events-->
+
+
+<!--list of constants-->
+<constant value="40" name="TIMER0"/>
+
+
+<!--show keywords state-->
+<keywords flag="true"/>
+
+
+<!--node thymio-II-->
+<node nodeId="1" name="thymio-II">var counter0 = 0 #intensity
+var counter1 = 0 #led color (x,0,0), (0,x,0), ...
+var counter2 = 0 #intendity UP or DOWN
+var initilizevar = 0
+
+sub initilize
+	timer.period[1] = TIMER0
+	call sound.system(-1)
+	counter2 = 1
+
+onevent timer0
+	if initilizevar == 0 then
+		callsub initilize
+		timer.period[0] = 0
+		initilizevar = 1
+	end
+	
+
+onevent timer1
+	if counter2 == 1 then
+		counter0++
+	else
+		counter0--
+	end
+	
+	if counter0 == 32 then
+		counter2 = -1
+	elseif counter0 &lt;= 0 then
+		counter2 = 1
+		counter1++
+	end
+	
+	if counter1 == 3 then
+		counter1 = 0
+	end
+
+	if counter1 == 0 then
+		call leds.top(counter0,0,0)
+	elseif counter1 == 1 then
+		call leds.top(0,counter0,0)
+	elseif counter1 == 2 then
+		call leds.top(0,0,counter0)
+	end</node>
+
+
+</network>

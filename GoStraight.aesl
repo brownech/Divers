@@ -1,0 +1,228 @@
+<!DOCTYPE aesl-source>
+<network>
+
+
+<!--list of global events-->
+
+
+<!--list of constants-->
+<constant value="100" name="FORWARDSPEED"/>
+<constant value="60" name="ROTATESPEED"/>
+<constant value="8" name="LOWSPEED"/>
+<constant value="200" name="WAITTIME"/>
+<constant value="760" name="RIGHTROTATETIME"/>
+<constant value="795" name="LEFTROTATETIME"/>
+<constant value="800" name="FORWARDTIME"/>
+<constant value="0" name="SPEEDCORRECTION"/>
+<constant value="5" name="TIMER"/>
+<constant value="40" name="TOLERANCE"/>
+
+
+<!--show keywords state-->
+<keywords flag="true"/>
+
+
+<!--node thymio-II-->
+<node nodeId="1" name="thymio-II">var counter = 0 #useful for timer
+var state = 0 #0:stop  1:align  2:waitBeforeRotate  3:waitBeforeForward  4:rotateRight  5:rotateLeft  6:forward
+var nextstate = 0 #controls whether next is rotateRight of rotateLeft
+var goreturnstate = 0 #1:go  2:return
+var centerproxcounter = 0
+var centerproxvalues[10]
+
+
+sub resetarray
+	for centerproxcounter in 0:9 do
+		centerproxvalues[centerproxcounter] = 0	
+	end
+
+sub initialize
+	call sound.system(-1)
+	call leds.buttons(0,0,0,0)
+	call leds.top(0,0,0)
+	call leds.temperature(0,0)
+	call leds.prox.h(0,0,0,0,0,0,0,0)
+	call leds.prox.v(0,0)
+	call leds.rc(0)
+	call leds.sound(0)
+	call leds.circle(0,0,0,0,0,0,0,0)
+	call leds.bottom.left(0,0,0)
+	call leds.bottom.right(0,0,0)
+	call leds.prox.h(0,0,0,0,0,0,0,0)
+	counter = 0
+	state = 1
+	nextstate = 0
+	goreturnstate = 2
+	timer.period[0] = TIMER
+	callsub resetarray
+	centerproxcounter = 0
+	
+sub forward
+	call leds.circle(2,2,0,0,0,0,0,2)
+	motor.left.target = FORWARDSPEED + SPEEDCORRECTION
+	motor.right.target = FORWARDSPEED
+	
+sub stop
+	call leds.circle(0,2,0,2,0,2,0,2)
+	motor.left.target = 0
+	motor.right.target = 0
+	
+sub rotateright
+	call leds.circle(0,2,2,2,0,0,0,0)
+	motor.left.target = ROTATESPEED
+	motor.right.target = -ROTATESPEED
+	
+sub rotateleft
+	call leds.circle(0,0,0,0,0,2,2,2)
+	motor.left.target = -ROTATESPEED
+	motor.right.target = ROTATESPEED
+	
+sub kill
+	callsub stop
+	call leds.circle(0,0,0,0,0,0,0,0)
+	state = 0
+	timer.period[0] = 0
+
+onevent buttons
+	#when -> button does not get pushed many times
+	when button.forward == 1 do
+		callsub initialize
+		#callsub forward
+	end
+	
+	when button.backward == 1 do
+		callsub kill
+	end
+	
+########################################################################################################################
+	
+#fast timer (~5ms)
+onevent timer0
+	counter ++
+
+	#align
+	if state == 1 then
+		#wait
+		if counter >= WAITTIME then
+			#if something is in front of the robot
+			if prox.horizontal[1] != 0 and prox.horizontal[3] != 0 then
+				#if robot is perpendicular
+				if prox.horizontal[1] >= (prox.horizontal[3] - TOLERANCE) and prox.horizontal[1] &lt;= (prox.horizontal[3] + TOLERANCE) then
+					counter = 0
+					state = 2
+					callsub stop
+					centerproxvalues[centerproxcounter] = prox.horizontal[2]
+					centerproxcounter++
+				end
+				#when right is closer than left
+				when prox.horizontal[1] &lt; (prox.horizontal[3] - TOLERANCE) do
+					motor.left.target = LOWSPEED
+					motor.right.target = -LOWSPEED
+					call leds.circle(0,0,2,0,0,0,0,0)
+				end
+				#when left is closer than right
+				when prox.horizontal[1] > (prox.horizontal[3] + TOLERANCE) do
+					motor.left.target = -LOWSPEED
+					motor.right.target = LOWSPEED
+					call leds.circle(0,0,0,0,0,0,2,0)
+				end
+			end
+		end
+	end
+	
+	#waitBeforeRotate
+	if state == 2 then
+		when counter >= WAITTIME do
+			counter = 0
+			state = nextstate
+		end
+	end
+	
+	#waitBeforeForward
+	if state == 3 then
+		when counter >= WAITTIME do
+			counter = 0
+			state = 6
+		end
+	end
+	
+	#rotateRight
+	if  state == 4 then		
+		when counter >= RIGHTROTATETIME do
+			counter = 0
+			if goreturnstate == 1 then
+				state = 3
+			elseif goreturnstate == 2 then
+				state = 1
+			end
+		end
+	end
+	
+	#rotateLeft
+	if state == 5 then
+		when counter >= LEFTROTATETIME do
+			counter = 0
+			if goreturnstate == 1 then
+				state = 1
+			elseif goreturnstate == 2 then
+				state = 3
+			end
+		end
+	end
+	
+	#forward
+	if state == 6 then
+		when counter >= FORWARDTIME do
+			counter = 0
+			state = 2
+		end
+	end
+	
+##########################################################################################################################
+	
+	#align
+	when state == 1 do
+		callsub stop
+		if goreturnstate == 1 then
+			goreturnstate = 2
+			#rotateLeft
+			nextstate = 5
+		elseif goreturnstate == 2 then
+			goreturnstate = 1
+			#rotateRight
+			nextstate = 4
+		end
+	end
+	
+	#waitBeforeRotate
+	when state == 2 do
+		callsub stop
+	end
+	
+	#waitBeforeForward
+	when state == 3 do
+		callsub stop
+	end
+	
+	#rotateRight
+	when state == 4 do
+		callsub rotateright
+	end
+	
+	#rotateLeft
+	when state == 5 do
+		callsub rotateleft
+	end
+	
+	#forward
+	when state == 6 do
+		if nextstate == 5 then
+			nextstate = 4
+		elseif nextstate == 4 then
+			nextstate = 5
+		end
+		callsub forward
+	end</node>
+
+
+</network>

@@ -1,0 +1,43 @@
+<!DOCTYPE aesl-source>
+<network>
+
+
+<!--list of global events-->
+
+
+<!--list of constants-->
+<constant value="200" name="TIMER"/>
+
+
+<!--show keywords state-->
+<keywords flag="true"/>
+
+
+<!--node thymio-II-->
+<node nodeId="1" name="thymio-II">var counter = 0
+
+sub initialize
+	counter = 0
+	call sound.system(-1)
+	timer.period[0] = TIMER
+	
+sub kill
+	timer.period[0] = 0
+	motor.left.target = 0
+	motor.right.target = 0
+	
+onevent button.center
+	when button.center == 1 do
+		callsub initialize
+	end
+	
+onevent button.backward
+	when button.backward == 1 do
+		callsub kill
+	end
+	
+onevent timer0
+	counter++</node>
+
+
+</network>

@@ -1,0 +1,98 @@
+<!DOCTYPE aesl-source>
+<network>
+
+
+<!--list of global events-->
+
+
+<!--list of constants-->
+<constant value="550" name="TIMER0"/>
+<constant value="32" name="MAXLED"/>
+
+
+<!--show keywords state-->
+<keywords flag="true"/>
+
+
+<!--node thymio-II-->
+<node nodeId="1" name="thymio-II">var running = 0 #timer is running
+var blinker = 0 #blinker on/off
+var blinking = 0
+var button = 0
+
+
+sub initialize
+	running = 1
+	button = -1
+	timer.period[0] = TIMER0
+	call leds.buttons(1,1,1,1)
+
+sub killleds
+	blinking = 0
+	call leds.circle(0,0,0,0,0,0,0,0)
+	#call leds.buttons(0,0,0,0)
+	call leds.top(0,0,0)
+	call leds.bottom.left(0,0,0)
+	call leds.bottom.right(0,0,0)
+	call leds.temperature(0,0)
+	call leds.prox.h(0,0,0,0,0,0,0,0)
+	call leds.prox.v(0,0)
+	call leds.rc(0)
+	call leds.sound(0)
+	
+sub kill
+	running = 0
+	timer.period[0] = 0
+	call sound.system(-1)
+	call leds.buttons(0,0,0,0)
+	callsub killleds
+				
+sub rightblinker
+	if blinker == 0 then
+		call leds.bottom.right(32, 16, 0)
+		call leds.circle(0,0,32,0,0,0,0,0)
+		blinker = 1
+	elseif blinker == 1 then
+		call leds.bottom.right(0, 0, 0)
+		call leds.circle(0,0,0,0,0,0,0,0)
+		blinker = 0
+	end
+	
+sub leftblinker
+	if blinker == 0 then
+		call leds.bottom.left(32, 16, 0)
+		call leds.circle(0,0,0,0,0,0,32,0)
+		blinker = 1
+	elseif blinker == 1 then
+		call leds.bottom.left(0, 0, 0)
+		call leds.circle(0,0,0,0,0,0,0,0)
+		blinker = 0
+	end
+
+onevent buttons
+	if button.center == 1 then
+		if running == 0 then
+			running = 1
+			callsub kill
+			callsub initialize
+		end
+	end
+	if running == 1 then
+		running = 0
+		callsub kill
+	end
+	
+	if button == 0 then
+		if button.right == 1 then
+			button = 1
+		end
+	end
+
+
+onevent timer0
+	if button == 1 then
+		callsub rightblinker
+	end</node>
+
+
+</network>

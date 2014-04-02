@@ -1,0 +1,265 @@
+<!DOCTYPE aesl-source>
+<network>
+
+
+<!--list of global events-->
+
+
+<!--list of constants-->
+<constant value="10" name="FASTTIMER"/>
+<constant value="4" name="LEDBTN"/>
+<constant value="8" name="LEDCIRCLE"/>
+<constant value="16" name="LEDTOP"/>
+<constant value="500" name="FORWARDCOUNTER"/>
+<constant value="80" name="SPEED"/>
+<constant value="150" name="TURNCOUNTER"/>
+<constant value="5" name="LEFTCORRECTION"/>
+<constant value="15" name="RIGHTCORRECTION"/>
+<constant value="281" name="ROTATECOUNTER"/>
+
+
+<!--show keywords state-->
+<keywords flag="true"/>
+
+
+<!--node thymio-II-->
+<node nodeId="1" name="thymio-II">var state = 0 #0:off  1:choseSize  2:go!  3:backwardRight  4:backwardLeft  5:backward  6:forwardRight  7:forwardLeft  8:rotate  9:longForward
+var size = 0 #0:off  1-5:size
+var pushedbutton = -1 #0:cntr  1:frnt  2:rght  3:bck  4:lft
+var counter = 0
+var sizecounter = 0 #counts the number of timer the bot has gone 10cm (varies from 0 to 5)
+var linecounter = 0
+
+call sound.system(-1)
+	
+sub forward
+	motor.left.target = SPEED + (LEFTCORRECTION/2)
+	motor.right.target = SPEED - (LEFTCORRECTION/2)
+	
+sub backward
+	motor.left.target = -SPEED - LEFTCORRECTION
+	motor.right.target =  -SPEED
+	
+sub stop
+	motor.left.target = 0
+	motor.right.target = 0
+	
+sub forwardRight
+	motor.left.target = SPEED - LEFTCORRECTION
+	motor.right.target = 0
+	
+sub forwardLeft
+	motor.left.target = 0
+	motor.right.target = SPEED
+	
+sub backwardRight
+	motor.left.target = -SPEED - LEFTCORRECTION
+	motor.right.target = 0
+	
+sub backwardLeft
+	motor.left.target = 0
+	motor.right.target = -SPEED + RIGHTCORRECTION
+	
+sub rotate
+	motor.left.target = -SPEED
+	motor.right.target = SPEED
+
+#reset LED state to default
+sub killleds
+	call leds.buttons(1,1,1,1)
+	call leds.circle(0,0,0,0,0,0,0,0)
+	call leds.bottom.left(0,0,0)
+	call leds.bottom.right(0,0,0)
+	call leds.top(0,0,0)
+	call leds.temperature(0,0)
+	call leds.prox.h(0,0,0,0,0,0,0,0)
+	call leds.prox.v(0,0)
+	call leds.rc(0)
+	call leds.sound(0)
+
+sub kill
+	callsub killleds
+	callsub stop
+	state = 0
+	size = 0
+
+sub initialize
+	callsub killleds
+	call leds.circle(LEDCIRCLE,0,0,0,0,0,0,0)
+	timer.period[0] = FASTTIMER
+	size = 1
+	counter = 0
+	sizecounter = 0
+	linecounter = 0
+
+onevent buttons
+	when button.center == 1 do
+		callsub initialize
+		call leds.buttons(LEDBTN,LEDBTN,LEDBTN,LEDBTN)
+		state = 1
+		call leds.top(0,LEDTOP,0)
+	end
+		
+	when button.forward == 1 do
+		call leds.buttons(LEDBTN,1,1,1)
+		if state == 1 then
+			state = 2
+		end
+	end
+	
+	when button.right == 1 do
+		call leds.buttons(1,LEDBTN,1,1)
+		if state == 1 and size &lt; 5 then
+			size++
+		end
+	end
+	
+	when button.backward == 1 do
+		callsub kill
+		call leds.buttons(1,1,LEDBTN,1)
+	end
+	
+	when button.left == 1 do
+		call leds.buttons(1,1,1,LEDBTN)
+		if state == 1 and size > 1 then
+			size--
+		end
+	end
+	
+	
+#timer0: fast timer (~10ms)
+onevent timer0
+	
+	#if in movement
+	if state != 0 and state != 1 then
+		counter++
+	end
+	
+	
+#######################################################
+#state management
+	
+	if state == 2 then
+		if counter >= FORWARDCOUNTER then
+			state = 3
+			counter = 0
+		end	
+	end
+	
+	if state == 3 then
+		if counter >= TURNCOUNTER then
+			state = 4
+			counter = 0
+		end
+	end
+	
+	if  state == 4 then
+		if counter >= TURNCOUNTER then
+			state = 5
+			counter = 0
+		end
+	end
+	
+	if state == 5 then
+		if counter >= FORWARDCOUNTER then
+			state = 6
+			counter = 0
+		end
+	end
+	
+	if state == 6 then
+		if counter >= TURNCOUNTER then
+			state = 7
+			counter = 0
+		end
+	end
+	
+	if state == 7 then
+		if counter >= TURNCOUNTER then
+			state = 2
+			counter = 0
+		end
+	end
+	
+	if state == 8 then
+		if  counter >= ROTATECOUNTER then
+			state = 9
+			counter = 0
+		end
+	end
+	
+	if state == 9 then
+		if counter >= (FORWARDCOUNTER + TURNCOUNTER) then
+			state = 3
+			counter = 0
+		end
+	end
+		
+#########################################################
+#movement management		
+		
+	when state == 2 do
+		callsub forward
+	end	
+	when state == 3 do
+		callsub backwardRight
+	end
+	when state == 4 do
+		callsub backwardLeft
+	end
+	when state == 5 do
+		callsub backward
+	end
+	when state == 6 do
+		callsub forwardRight
+		linecounter++
+	end
+	when state == 7 do
+		callsub forwardLeft
+	end
+	
+	when linecounter == 13 do
+		state = 8
+		callsub rotate	
+	end
+	
+	when state == 9 do
+		callsub forward
+	end
+	
+	when linecounter == 26 do
+		state = 0
+		callsub stop
+	end
+	
+###########################################################
+#LEDS
+
+	#reset LEDs to low state
+	when button.center == 0 and button.forward == 0 and button.right == 0 and button.backward == 0 and button.left == 0  do
+		call leds.buttons(1,1,1,1)
+	end
+	
+	when size == 1 do
+		call leds.circle(LEDCIRCLE,0,0,0,0,0,0,0)
+	end
+	
+	when size == 2 do
+		call leds.circle(LEDCIRCLE,LEDCIRCLE,0,0,0,0,0,0)
+	end
+	
+	when size == 3 do
+		call leds.circle(LEDCIRCLE,LEDCIRCLE,LEDCIRCLE,0,0,0,0,0)
+	end
+	
+	when size == 4 do
+		call leds.circle(LEDCIRCLE,LEDCIRCLE,LEDCIRCLE,LEDCIRCLE,0,0,0,0)
+	end
+	
+	when size == 5 do
+		call leds.circle(LEDCIRCLE,LEDCIRCLE,LEDCIRCLE,LEDCIRCLE,LEDCIRCLE,0,0,0)
+	end
+</node>
+
+
+</network>

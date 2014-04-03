@@ -10,8 +10,8 @@
 <constant value="60" name="ROTATESPEED"/>
 <constant value="8" name="LOWSPEED"/>
 <constant value="200" name="WAITTIME"/>
-<constant value="758" name="RIGHTROTATETIME"/>
-<constant value="786" name="LEFTROTATETIME"/>
+<constant value="759" name="RIGHTROTATETIME"/>
+<constant value="789" name="LEFTROTATETIME"/>
 <constant value="800" name="FORWARDTIME"/>
 <constant value="0" name="SPEEDCORRECTION"/>
 <constant value="5" name="TIMER"/>
@@ -222,7 +222,8 @@ onevent timer0
 			nextstate = 5
 		end
 		callsub forward
-	end</node>
+	end
+	</node>
 
 
 </network>

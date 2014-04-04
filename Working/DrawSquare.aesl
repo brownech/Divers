@@ -1,0 +1,252 @@
+<!DOCTYPE aesl-source>
+<network>
+
+
+<!--list of global events-->
+
+
+<!--list of constants-->
+<constant value="0" name="OFF"/>
+<constant value="1" name="CHOSESIZE"/>
+<constant value="2" name="WAIT"/>
+<constant value="3" name="ALIGNREAR"/>
+<constant value="4" name="GOFORWARD"/>
+<constant value="5" name="ROTATE"/>
+<constant value="6" name="ALIGNFRONT"/>
+<constant value="0" name="FALSE"/>
+<constant value="1" name="TRUE"/>
+<constant value="100" name="FORWARDSPEED"/>
+<constant value="60" name="ROTATESPEED"/>
+<constant value="10" name="ALIGNSPEED"/>
+<constant value="200" name="WAITTIME"/>
+<constant value="350" name="FORWARDTIME"/>
+<constant value="759" name="ROTATETIME"/>
+<constant value="5" name="TIMER"/>
+<constant value="4" name="LEDHIGH"/>
+<constant value="1" name="LEDLOW"/>
+<constant value="40" name="PROXTOLERANCE"/>
+<constant value="3500" name="PROXREAR"/>
+
+
+<!--show keywords state-->
+<keywords flag="true"/>
+
+
+<!--node thymio-II-->
+<node nodeId="1" name="thymio-II">#Filename: DrawSquare.aesl
+#Goal: Draw a square of sizes ranging from 10cm to 50cm, defined by the user
+#Name: Christopher Browne
+#Place: ETML, Lausanne
+
+var state = OFF
+var nextstate = OFF
+var waitcounter = 0
+
+var sidecounter = 0 #varies from 1 to 4 (side of the square being drwan)
+var spiralcounter = 0 #number of times robot has gone round
+var forwardcounter = 0
+
+var size = 0 #o:off  1-5:size
+var previoussize = 0
+
+var ledarray[8] #stores values for leds.circle
+var i = 0 #for going through array
+
+var rearleftisaligned = FALSE
+var rearrightisaligned = FALSE
+
+sub initialize
+	call sound.system(-1)
+	call leds.buttons(0,0,0,0)
+	call leds.top(0,0,0)
+	call leds.temperature(0,0)
+	call leds.prox.h(0,0,0,0,0,0,0,0)
+	call leds.prox.v(0,0)
+	call leds.rc(0)
+	call leds.sound(0)
+	call leds.circle(0,0,0,0,0,0,0,0)
+	call leds.bottom.left(0,0,0)
+	call leds.bottom.right(0,0,0)
+	call leds.prox.h(0,0,0,0,0,0,0,0)
+	state = CHOSESIZE
+	nextstate = OFF
+	timer.period[0] = TIMER
+	waitcounter = 0
+	size = 1
+	previoussize = 0
+	sidecounter = 0
+	spiralcounter = 0
+	forwardcounter = 0
+	for i in 0:7 do
+		ledarray[i] = 0
+	end
+	
+#turn circle LEDs on and off according to size
+sub switchcircleleds
+	#go through array
+	for i in 0:7 do
+		if i &lt; size then
+			ledarray[i] = LEDHIGH
+		else
+			ledarray[i] = 0
+		end
+	end
+	call leds.circle(ledarray[0], ledarray[1], ledarray[2], ledarray[3], ledarray[4], ledarray[5], ledarray[6], ledarray[7])
+	
+sub goforward
+	call leds.circle(LEDLOW, LEDLOW,0,0,0,0,0,LEDLOW)
+	motor.left.target = FORWARDSPEED
+	motor.right.target = FORWARDSPEED
+	
+sub stop
+	call leds.circle(0,LEDLOW,0,LEDLOW,0,LEDLOW,0,LEDLOW)
+	motor.left.target = 0
+	motor.right.target = 0
+	
+#rotate 90° to the right
+sub rotate
+	call leds.circle(0,LEDLOW,LEDLOW,LEDLOW,0,0,0,0)
+	motor.left.target = ROTATESPEED
+	motor.right.target = -ROTATESPEED
+	
+sub kill
+	callsub stop
+	#call leds.circle(0,0,0,0,0,0,0,0)
+	state = 0
+	timer.period[0] = 0
+	
+#align rear, so robot is perpendicular to wall
+sub alignrear
+	#when rear-left is too close
+	when prox.horizontal[5] > (PROXREAR + PROXTOLERANCE) do
+		motor.left.target = ALIGNSPEED
+	end
+	#when rear-left is too far
+	when prox.horizontal[5] &lt; (PROXREAR - PROXTOLERANCE) do
+		motor.left.target = -ALIGNSPEED
+	end
+	#when rear-right is too close
+	when prox.horizontal[6] > (PROXREAR + PROXTOLERANCE) do
+		motor.right.target = ALIGNSPEED
+	end
+	#when rear-right is too far
+	when prox.horizontal[6] &lt; (PROXREAR - PROXTOLERANCE) do
+		motor.right.target = -ALIGNSPEED
+	end
+	#stop left motor when distance is correct
+	when prox.horizontal[5] &lt; (PROXREAR + PROXTOLERANCE) and prox.horizontal[5] > (PROXREAR - PROXTOLERANCE) do
+		motor.left.target = 0
+		rearleftisaligned = TRUE
+	end
+	#stop right motor when distance is correct
+	when prox.horizontal[6] &lt; (PROXREAR + PROXTOLERANCE) and prox.horizontal[6] > (PROXREAR - PROXTOLERANCE) do
+		motor.right.target = 0
+		rearrightisaligned = TRUE
+	end
+	
+############################################################
+	
+onevent buttons
+	#when -> button does not get pushed many times
+	when button.center == 1 do
+		call leds.buttons(LEDHIGH, LEDHIGH, LEDHIGH, LEDHIGH)
+		if state == OFF then
+			callsub initialize
+		elseif state == CHOSESIZE then
+			state = ALIGNREAR
+		elseif state == WAIT then
+			nextstate = GOFORWARD
+		end
+	end
+	
+	when button.forward == 1 do
+		call leds.buttons(LEDHIGH, LEDLOW, LEDLOW, LEDLOW)
+	end
+	
+	when button.right == 1 do
+		call leds.buttons(LEDLOW, LEDHIGH, LEDLOW, LEDLOW)
+		#change size
+		if state == CHOSESIZE and size &lt; 5 then
+			size++
+		end
+	end
+	
+	when button.backward == 1 do
+		call leds.buttons(LEDLOW, LEDLOW, LEDHIGH, LEDLOW)
+		callsub kill
+	end
+	
+	when button.left == 1 do
+		call leds.buttons(LEDLOW, LEDLOW, LEDLOW, LEDHIGH)
+		#change size
+		if state == CHOSESIZE and size > 1 then
+			size--
+		end
+	end
+	
+	#reset LEDs when button is released
+	when button.center == 0 and button.forward == 0 and button.right == 0 and button.backward == 0 and button.left == 0 do
+		call leds.buttons(LEDLOW, LEDLOW, LEDLOW, LEDLOW)
+	end
+	
+############################################################
+	
+#fast timer (~5 ms)
+onevent timer0
+
+	when state == WAIT do
+		waitcounter = 0
+		callsub stop
+	end
+	
+	when state == GOFORWARD do
+		forwardcounter = 0
+		callsub goforward
+		if sidecounter == 4 then
+			sidecounter = 1
+		else
+			sidecounter++
+		end
+	end
+
+############################################################
+
+	if state == CHOSESIZE then
+		#is size has changed
+		if size != previoussize then
+			previoussize = size
+			callsub switchcircleleds
+		end
+	end
+	
+	if state == ALIGNREAR then
+		#if robot has a wall behind it
+		if prox.horizontal[5] != 0 and prox.horizontal[6] != 0 then
+			callsub alignrear
+			if rearleftisaligned == TRUE and rearrightisaligned == TRUE then
+				state = WAIT
+				nextstate = WAIT
+			end
+		end
+	end
+	
+	if state == WAIT then
+		waitcounter++
+		when waitcounter >= WAITTIME do
+			#must initialize counter, so following code is checked many times,
+			#so robot can go forward after user pushes button after self-align (and puts pen in)
+			waitcounter = 0
+			state = nextstate
+		end
+	end
+	
+	if state == GOFORWARD then
+		forwardcounter++
+		when forwardcounter >= FORWARDTIME do
+			state = WAIT
+			nextstate = ROTATE
+		end
+	end</node>
+
+
+</network>

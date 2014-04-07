@@ -19,16 +19,17 @@
 <constant value="60" name="ROTATESPEED"/>
 <constant value="10" name="ALIGNSPEED"/>
 <constant value="200" name="WAITTIME"/>
-<constant value="450" name="MAXFORWARDTIME"/>
-<constant value="759" name="ROTATETIME"/>
-<constant value="20" name="DELTA"/>
-<constant value="5" name="TIMER"/>
+<constant value="675" name="MAXFORWARDTIME"/>
+<constant value="761" name="ROTATETIME"/>
+<constant value="25" name="DELTA"/>
+<constant value="5" name="FASTTIMER"/>
 <constant value="4" name="LEDHIGH"/>
 <constant value="1" name="LEDLOW"/>
 <constant value="40" name="PROXTOLERANCE"/>
 <constant value="2500" name="PROXREAR"/>
 <constant value="4000" name="PROXFRONT"/>
 <constant value="3600" name="PROXFRONTSIDE"/>
+<constant value="50" name="SLOWTIMER"/>
 
 
 <!--show keywords state-->
@@ -51,17 +52,21 @@ var forwardcounter = 0
 var rotatecounter = 0
 var forwardtime = 0
 
-
 var size = 0 #o:off  1-5:size
 var previoussize = 0
 
 var ledarray[8] #stores values for leds.circle
 var i = 0 #for going through array
+var j = 0
 
 var rearleftisaligned = FALSE
 var rearrightisaligned = FALSE
 var frontleftisaligned = FALSE
 var frontrightisaligned = FALSE
+
+var ledbutton = 0 #shows time passed on current line
+var ledcircle = 0 #shows time passed on current spiral
+var totalspiralnumber = 0
 
 sub initialize
 	call sound.system(-1)
@@ -78,19 +83,23 @@ sub initialize
 	call leds.prox.h(0,0,0,0,0,0,0,0)
 	state = CHOSESIZE
 	nextstate = OFF
-	timer.period[0] = TIMER
+	timer.period[0] = FASTTIMER
+	timer.period[1] = SLOWTIMER
 	waitcounter = 0
 	forwardtime = MAXFORWARDTIME 
 	size = 1
 	previoussize = 0
 	sidecounter = 0
-	spiralcounter = 0
+	spiralcounter = -1
 	forwardcounter = 0
 	rotatecounter = 0
 	rearleftisaligned = FALSE
 	rearrightisaligned = FALSE
 	frontleftisaligned = FALSE
 	frontrightisaligned = FALSE
+	ledbutton = 0
+	ledcircle = 0
+	totalspiralnumber = 0
 	for i in 0:7 do
 		ledarray[i] = 0
 	end
@@ -108,18 +117,18 @@ sub switchcircleleds
 	call leds.circle(ledarray[0], ledarray[1], ledarray[2], ledarray[3], ledarray[4], ledarray[5], ledarray[6], ledarray[7])
 	
 sub goforward
-	call leds.circle(LEDLOW, LEDLOW,0,0,0,0,0,LEDLOW)
+	#call leds.circle(LEDLOW, LEDLOW,0,0,0,0,0,LEDLOW)
 	motor.left.target = FORWARDSPEED
 	motor.right.target = FORWARDSPEED
 	
 sub stop
-	call leds.circle(0,LEDLOW,0,LEDLOW,0,LEDLOW,0,LEDLOW)
+	#call leds.circle(0,LEDLOW,0,LEDLOW,0,LEDLOW,0,LEDLOW)
 	motor.left.target = 0
 	motor.right.target = 0
 	
 #rotate 90° to the right
 sub rotate
-	call leds.circle(0,LEDLOW,LEDLOW,LEDLOW,0,0,0,0)
+	#call leds.circle(0,LEDLOW,LEDLOW,LEDLOW,0,0,0,0)
 	motor.left.target = ROTATESPEED
 	motor.right.target = -ROTATESPEED
 	
@@ -193,13 +202,30 @@ sub resetalignbools
 	
 sub getforwardtime
 	if sidecounter == 1 then
-		forwardtime = MAXFORWARDTIME - (spiralcounter * DELTA)
+		forwardtime = (size * MAXFORWARDTIME) - (spiralcounter * DELTA)
 	elseif sidecounter == 2 then
-		forwardtime = MAXFORWARDTIME - (2 * spiralcounter * DELTA)
+		forwardtime = (size * MAXFORWARDTIME) - (2 * spiralcounter * DELTA)
 	elseif sidecounter == 4 then
-		forwardtime = MAXFORWARDTIME - ((2 * spiralcounter + 1) * DELTA)
+		forwardtime = (size * MAXFORWARDTIME) - ((2 * spiralcounter + 1) * DELTA)
 	end
 	
+sub lightcircleleds
+	if ledcircle &lt;= 32 then
+		call leds.circle(ledcircle,0,0,0,0,0,0,0)
+	else
+		j = 0
+		while ledcircle > 32 do
+			ledcircle = ledcircle - 32
+			j++
+		end
+		i = 0
+		while i &lt; j do
+			ledarray[i] = 32
+			i++
+		end
+		ledarray[i] = ledcircle
+		call leds.circle(ledarray[0],ledarray[1],ledarray[2],ledarray[3],ledarray[4],ledarray[5],ledarray[6],ledarray[7])
+	end
 ############################################################
 	
 onevent buttons
@@ -210,6 +236,9 @@ onevent buttons
 			callsub initialize
 		elseif state == CHOSESIZE then
 			state = ALIGNREAR
+			call leds.circle(0,0,0,0,0,0,0,0)
+			call leds.buttons(0,0,0,0)
+			totalspiralnumber = size * MAXFORWARDTIME / (2 * DELTA)
 		elseif state == WAIT then
 			nextstate = GOFORWARD
 		end
@@ -241,9 +270,12 @@ onevent buttons
 	end
 	
 	#reset LEDs when button is released
-	when button.center == 0 and button.forward == 0 and button.right == 0 and button.backward == 0 and button.left == 0 do
-		call leds.buttons(LEDLOW, LEDLOW, LEDLOW, LEDLOW)
+	if state != ALIGNREAR then
+		when button.center == 0 and button.forward == 0 and button.right == 0 and button.backward == 0 and button.left == 0 do
+			call leds.buttons(LEDLOW, LEDLOW, LEDLOW, LEDLOW)
+		end
 	end
+	
 	
 ############################################################
 	
@@ -260,7 +292,6 @@ onevent timer0
 		callsub goforward
 		if sidecounter == 4 then
 			sidecounter = 1
-			spiralcounter++
 		else
 			sidecounter++
 		end
@@ -274,6 +305,10 @@ onevent timer0
 	
 	when state == ALIGNREAR or state == ALIGNFRONT do
 		callsub resetalignbools
+		if ((2 * spiralcounter + 1) * DELTA) >= size * MAXFORWARDTIME then
+			callsub stop
+			state = OFF
+		end
 	end
 	
 	#useful if prox is already smaller than PROXREAR + PROXTOLERANCE when robot makes turn 2
@@ -334,6 +369,7 @@ onevent timer0
 	
 	#if robot must align front with wall, instead of rotating
 	if sidecounter == 3 then
+		forwardcounter++
 		#when robot is close enough to wall to start aligning
 		when prox.horizontal[2] > (PROXFRONT - PROXTOLERANCE) do
 			state = WAIT
@@ -352,6 +388,30 @@ onevent timer0
 				nextstate = ALIGNREAR
 			end	
 		end
+	end
+
+#slow timer (~50ms)
+onevent timer1
+	if state == GOFORWARD then
+		ledbutton = 32 * forwardcounter / forwardtime
+		if ledbutton > 32 then
+			ledbutton = 32
+		end
+		if sidecounter == 1 then
+			call leds.buttons(ledbutton,0,0,0)
+		elseif sidecounter == 2 then
+			call leds.buttons(32,ledbutton,0,0)
+		elseif sidecounter == 3 then
+			call leds.buttons(32,32,ledbutton,0)
+		elseif sidecounter == 4 then
+			call leds.buttons(32,32,32,ledbutton)
+		end	
+	end	
+	
+	when state == ALIGNREAR do
+		spiralcounter++
+		ledcircle = spiralcounter * 256 / totalspiralnumber
+		callsub lightcircleleds	
 	end</node>
 
 

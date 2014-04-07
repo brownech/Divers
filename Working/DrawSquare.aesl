@@ -19,13 +19,16 @@
 <constant value="60" name="ROTATESPEED"/>
 <constant value="10" name="ALIGNSPEED"/>
 <constant value="200" name="WAITTIME"/>
-<constant value="350" name="FORWARDTIME"/>
+<constant value="450" name="MAXFORWARDTIME"/>
 <constant value="759" name="ROTATETIME"/>
+<constant value="20" name="DELTA"/>
 <constant value="5" name="TIMER"/>
 <constant value="4" name="LEDHIGH"/>
 <constant value="1" name="LEDLOW"/>
 <constant value="40" name="PROXTOLERANCE"/>
-<constant value="3500" name="PROXREAR"/>
+<constant value="2500" name="PROXREAR"/>
+<constant value="4000" name="PROXFRONT"/>
+<constant value="3600" name="PROXFRONTSIDE"/>
 
 
 <!--show keywords state-->
@@ -45,6 +48,9 @@ var waitcounter = 0
 var sidecounter = 0 #varies from 1 to 4 (side of the square being drwan)
 var spiralcounter = 0 #number of times robot has gone round
 var forwardcounter = 0
+var rotatecounter = 0
+var forwardtime = 0
+
 
 var size = 0 #o:off  1-5:size
 var previoussize = 0
@@ -54,6 +60,8 @@ var i = 0 #for going through array
 
 var rearleftisaligned = FALSE
 var rearrightisaligned = FALSE
+var frontleftisaligned = FALSE
+var frontrightisaligned = FALSE
 
 sub initialize
 	call sound.system(-1)
@@ -72,11 +80,17 @@ sub initialize
 	nextstate = OFF
 	timer.period[0] = TIMER
 	waitcounter = 0
+	forwardtime = MAXFORWARDTIME 
 	size = 1
 	previoussize = 0
 	sidecounter = 0
 	spiralcounter = 0
 	forwardcounter = 0
+	rotatecounter = 0
+	rearleftisaligned = FALSE
+	rearrightisaligned = FALSE
+	frontleftisaligned = FALSE
+	frontrightisaligned = FALSE
 	for i in 0:7 do
 		ledarray[i] = 0
 	end
@@ -134,14 +148,56 @@ sub alignrear
 		motor.right.target = -ALIGNSPEED
 	end
 	#stop left motor when distance is correct
-	when prox.horizontal[5] &lt; (PROXREAR + PROXTOLERANCE) and prox.horizontal[5] > (PROXREAR - PROXTOLERANCE) do
+	if prox.horizontal[5] &lt; (PROXREAR + PROXTOLERANCE) and prox.horizontal[5] > (PROXREAR - PROXTOLERANCE) then
 		motor.left.target = 0
 		rearleftisaligned = TRUE
 	end
 	#stop right motor when distance is correct
-	when prox.horizontal[6] &lt; (PROXREAR + PROXTOLERANCE) and prox.horizontal[6] > (PROXREAR - PROXTOLERANCE) do
+	if prox.horizontal[6] &lt; (PROXREAR + PROXTOLERANCE) and prox.horizontal[6] > (PROXREAR - PROXTOLERANCE) then
 		motor.right.target = 0
 		rearrightisaligned = TRUE
+	end
+	
+sub alignfront
+	when prox.horizontal[1] > (PROXFRONTSIDE) do
+		motor.left.target = -ALIGNSPEED
+	end
+	
+	when prox.horizontal[1] &lt; (PROXFRONTSIDE - 2 * PROXTOLERANCE) do
+		motor.left.target = ALIGNSPEED
+	end
+	
+	when prox.horizontal[3] > (PROXFRONTSIDE + PROXTOLERANCE) do
+		motor.right.target = -ALIGNSPEED
+	end
+	
+	when prox.horizontal[3] &lt; (PROXFRONTSIDE - PROXTOLERANCE) do
+		motor.right.target = ALIGNSPEED
+	end
+	
+	if prox.horizontal[1] &lt; (PROXFRONTSIDE) and prox.horizontal[1] > (PROXFRONTSIDE - 2 * PROXTOLERANCE) then
+		motor.left.target = 0
+		frontleftisaligned = TRUE
+	end
+	
+	if prox.horizontal[3] &lt; (PROXFRONTSIDE + PROXTOLERANCE) and prox.horizontal[3] > (PROXFRONTSIDE - PROXTOLERANCE) then
+		motor.right.target = 0
+		frontrightisaligned = TRUE
+	end
+	
+sub resetalignbools
+	rearleftisaligned = FALSE
+	rearrightisaligned = FALSE
+	frontleftisaligned = FALSE
+	frontrightisaligned = FALSE
+	
+sub getforwardtime
+	if sidecounter == 1 then
+		forwardtime = MAXFORWARDTIME - (spiralcounter * DELTA)
+	elseif sidecounter == 2 then
+		forwardtime = MAXFORWARDTIME - (2 * spiralcounter * DELTA)
+	elseif sidecounter == 4 then
+		forwardtime = MAXFORWARDTIME - ((2 * spiralcounter + 1) * DELTA)
 	end
 	
 ############################################################
@@ -204,8 +260,27 @@ onevent timer0
 		callsub goforward
 		if sidecounter == 4 then
 			sidecounter = 1
+			spiralcounter++
 		else
 			sidecounter++
+		end
+		callsub getforwardtime
+	end
+	
+	when state == ROTATE do
+		rotatecounter = 0
+		callsub rotate
+	end
+	
+	when state == ALIGNREAR or state == ALIGNFRONT do
+		callsub resetalignbools
+	end
+	
+	#useful if prox is already smaller than PROXREAR + PROXTOLERANCE when robot makes turn 2
+	when sidecounter == 3 do
+		if prox.horizontal[2] > (PROXFRONT - PROXTOLERANCE) then
+			state = WAIT
+			nextstate = ALIGNFRONT
 		end
 	end
 
@@ -225,8 +300,16 @@ onevent timer0
 			callsub alignrear
 			if rearleftisaligned == TRUE and rearrightisaligned == TRUE then
 				state = WAIT
-				nextstate = WAIT
+				nextstate = GOFORWARD #WAIT
 			end
+		end
+	end
+	
+	if state == ALIGNFRONT then
+		callsub alignfront
+		if frontleftisaligned == TRUE and frontrightisaligned == TRUE then
+			state = WAIT
+			nextstate = ROTATE
 		end
 	end
 	
@@ -240,11 +323,34 @@ onevent timer0
 		end
 	end
 	
-	if state == GOFORWARD then
+	#rotate if not third side of the square
+	if state == GOFORWARD and sidecounter != 3 then
 		forwardcounter++
-		when forwardcounter >= FORWARDTIME do
+		when forwardcounter >= forwardtime do
 			state = WAIT
 			nextstate = ROTATE
+		end
+	end
+	
+	#if robot must align front with wall, instead of rotating
+	if sidecounter == 3 then
+		#when robot is close enough to wall to start aligning
+		when prox.horizontal[2] > (PROXFRONT - PROXTOLERANCE) do
+			state = WAIT
+			nextstate = ALIGNFRONT
+		end
+	end
+	
+	if state == ROTATE then
+		rotatecounter++
+		when rotatecounter >= ROTATETIME do
+			state = WAIT
+			#if not in final part of square, go forward, if not align
+			if sidecounter != 4 then
+				nextstate = GOFORWARD
+			else
+				nextstate = ALIGNREAR
+			end	
 		end
 	end</node>
 

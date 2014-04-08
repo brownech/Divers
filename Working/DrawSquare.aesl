@@ -7,7 +7,7 @@
 
 <!--list of constants-->
 <constant value="0" name="OFF"/>
-<constant value="1" name="CHOSESIZE"/>
+<constant value="1" name="CHOOSESIZE"/>
 <constant value="2" name="WAIT"/>
 <constant value="3" name="ALIGNREAR"/>
 <constant value="4" name="GOFORWARD"/>
@@ -81,7 +81,7 @@ sub initialize
 	call leds.bottom.left(0,0,0)
 	call leds.bottom.right(0,0,0)
 	call leds.prox.h(0,0,0,0,0,0,0,0)
-	state = CHOSESIZE
+	state = CHOOSESIZE
 	nextstate = OFF
 	timer.period[0] = FASTTIMER
 	timer.period[1] = SLOWTIMER
@@ -234,7 +234,7 @@ onevent buttons
 		call leds.buttons(LEDHIGH, LEDHIGH, LEDHIGH, LEDHIGH)
 		if state == OFF then
 			callsub initialize
-		elseif state == CHOSESIZE then
+		elseif state == CHOOSESIZE then
 			state = ALIGNREAR
 			call leds.circle(0,0,0,0,0,0,0,0)
 			call leds.buttons(0,0,0,0)
@@ -251,7 +251,7 @@ onevent buttons
 	when button.right == 1 do
 		call leds.buttons(LEDLOW, LEDHIGH, LEDLOW, LEDLOW)
 		#change size
-		if state == CHOSESIZE and size &lt; 5 then
+		if state == CHOOSESIZE and size &lt; 5 then
 			size++
 		end
 	end
@@ -264,7 +264,7 @@ onevent buttons
 	when button.left == 1 do
 		call leds.buttons(LEDLOW, LEDLOW, LEDLOW, LEDHIGH)
 		#change size
-		if state == CHOSESIZE and size > 1 then
+		if state == CHOOSESIZE and size > 1 then
 			size--
 		end
 	end
@@ -321,7 +321,7 @@ onevent timer0
 
 ############################################################
 
-	if state == CHOSESIZE then
+	if state == CHOOSESIZE then
 		#is size has changed
 		if size != previoussize then
 			previoussize = size
@@ -391,6 +391,7 @@ onevent timer0
 	end
 
 #slow timer (~50ms)
+#used for updating LED state to show drawing completion
 onevent timer1
 	if state == GOFORWARD then
 		ledbutton = 32 * forwardcounter / forwardtime

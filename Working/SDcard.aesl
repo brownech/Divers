@@ -1,0 +1,92 @@
+<!DOCTYPE aesl-source>
+<network>
+
+
+<!--list of global events-->
+
+
+<!--list of constants-->
+
+
+<!--show keywords state-->
+<keywords flag="true"/>
+
+
+<!--node thymio-II-->
+<node nodeId="1" name="thymio-II">#Goal: Write and read SD card
+#Name: Christopher Browne
+#Place: ETML, Lausanne
+
+var counter = 0
+var readarray[8] #used for counter
+var writearray[8] #used for counter
+var leftrightarray[2] #use for showind left and right key presses
+var i
+var leftbutton = 0
+var rightbutton = 0
+
+
+############################################################################
+
+sub initialize
+	counter = 0
+	leftbutton = 0
+	rightbutton = 0
+	timer.period[0] = 500
+	call sound.system(-1)
+	for i in 0:7 do
+		readarray[i] = 0
+		writearray[i] = 0
+	end
+	for i in 0:1 do
+		leftrightarray[i] = 0
+	end
+	
+sub kill
+	timer.period[0] = 0
+	
+############################################################################
+	
+onevent buttons
+	when button.center == 1 do
+		callsub initialize
+	end
+	when button.backward == 1 do
+		callsub kill
+		call sd.open(2,1)
+		call sd.write(leftbutton,1)
+		call sd.open(3,1)
+		call sd.write(rightbutton,1)
+	end
+	when button.forward == 1 do
+		call sd.open(1,1)
+		call sd.read(readarray,7)
+		call sd.open(2,1)
+		call sd.read(leftrightarray[0],1)
+		call sd.open(3,1)
+		call sd.read(leftrightarray[1],1)
+		
+	end
+	when button.left == 1 do
+		leftbutton++
+	end
+	when button.right == 1 do
+		rightbutton++
+	end
+	
+############################################################################
+	
+onevent timer0
+	counter++
+	if counter &lt; 8 then
+		writearray[counter] = counter
+	end
+	
+	when counter >= 7 do
+		call sd.open(1,1)
+		call sd.write(writearray,1)
+	end
+	</node>
+
+
+</network>

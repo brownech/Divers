@@ -1,0 +1,136 @@
+<!DOCTYPE aesl-source>
+<network>
+
+
+<!--list of global events-->
+
+
+<!--list of constants-->
+<constant value="100" name="TIMER"/>
+<constant value="9" name="TICKSPERSECOND"/>
+<constant value="19" name="ARRAYSIZE"/>
+<constant value="100" name="SPEED"/>
+
+
+<!--show keywords state-->
+<keywords flag="true"/>
+
+
+<!--node thymio-II-->
+<node nodeId="1" name="thymio-II">#Goal: Draw a square of sizes ranging from 10cm to 50cm, defined by the user
+#Name: Christopher Browne
+#Place: ETML, Lausanne
+#Note: ARRAYSIZE and TICKSPERSECOND must be 1 lower than intended, because for loops only work with constants, and one can not substract this 1 loop iteration manually
+
+var tickCounter = 0 #counts ticks in 1 second
+var speedPerTick[TICKSPERSECOND + 1] #stores speed on every tick (~100ms)
+var speedAverage = 0 #used to sum and average speed during 1 second
+
+var secondCounter = 0 #counts seconds since start
+var speedPerSecond[ARRAYSIZE + 1] #stores speed every second
+
+var distance = 0 #distance traveled
+
+var timerLength = 1000 / (TICKSPERSECOND + 1) # =~100ms
+
+var leftCounter = 0 #number of left clicks
+var rightCounter = 0 #number of right clicks
+
+var i = 0
+
+########################################################
+
+sub initiliazeSpeedPerTick
+	for i in 0:TICKSPERSECOND do
+		speedPerTick[i] = 0
+	end
+
+sub initialize
+	call sound.system(-1)
+	tickCounter = 0
+	speedAverage = 0
+	secondCounter = 0
+	leftCounter = 0
+	rightCounter = 0
+	callsub initiliazeSpeedPerTick
+	for i in 0:ARRAYSIZE do
+		speedPerSecond[i] = 0
+	end
+	timer.period[0] = timerLength
+	
+sub go
+	motor.left.target = SPEED
+	motor.right.target = SPEED
+	
+sub stop
+	motor.left.target = 0
+	motor.right.target = 0
+	timer.period[0] = 0
+	
+########################################################
+
+onevent buttons
+	when button.forward == 1 do
+		callsub initialize
+		callsub go
+	end
+	when button.backward == 1 do
+		callsub stop
+	end
+	when button.right == 1 do
+		rightCounter++
+	end
+	when button.left == 1 do
+		leftCounter++
+	end
+	
+########################################################
+	
+onevent timer0
+	
+	#store average speed of both wheels
+	speedPerTick[tickCounter] = (motor.left.speed + motor.right.speed) / 2
+	
+	tickCounter++
+	
+	#every second
+	when tickCounter == (TICKSPERSECOND + 1) do
+	
+		tickCounter = 0
+		
+		#when array is full, after 20 seconds
+		when secondCounter == (ARRAYSIZE + 1) do
+			callsub stop
+		end
+		
+		#sum all speed during 1 second
+		for i in 0:TICKSPERSECOND do
+			speedAverage += speedPerTick[i]
+		end
+		
+		#get average
+		speedAverage = speedAverage / 10
+		
+		#distance = speed, because it is measured on 1 second
+		distance = speedAverage
+		
+		speedAverage = 0
+		
+		speedPerSecond[secondCounter] = distance
+		
+		secondCounter++
+		
+		call sd.open(1,ARRAYSIZE)
+		call sd.write(speedAverage,ARRAYSIZE + 1)
+		
+		call sd.open(2,0)
+		call sd.write(leftCounter,1)
+		
+		call sd.open(3,0)
+		call sd.write(rightCounter,1)
+		
+	end
+	</node>
+
+
+</network>

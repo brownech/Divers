@@ -1,0 +1,306 @@
+<!DOCTYPE aesl-source>
+<network>
+
+
+<!--list of global events-->
+
+
+<!--list of constants-->
+<constant value="0" name="OFF"/>
+<constant value="1" name="STOP"/>
+<constant value="2" name="WAIT"/>
+<constant value="3" name="GOFORWARD"/>
+<constant value="4" name="ROTATECW"/>
+<constant value="5" name="ROTATECCW"/>
+<constant value="5" name="FASTTIMER"/>
+<constant value="35" name="SLOWTIMER"/>
+<constant value="88" name="FORWARDSPEED"/>
+<constant value="60" name="ROTATESPEED"/>
+<constant value="1" name="LEDLOW"/>
+<constant value="8" name="LEDHIGH"/>
+<constant value="75" name="WAITIME"/>
+<constant value="848" name="ROTATECWTIME"/>
+<constant value="880" name="ROTATECCWTIME"/>
+<constant value="0" name="NORTH"/>
+<constant value="1" name="EAST"/>
+<constant value="2" name="SOUTH"/>
+<constant value="3" name="WEST"/>
+<constant value="49" name="ARRAYSIZE"/>
+
+
+<!--show keywords state-->
+<keywords flag="true"/>
+
+
+<!--node thymio-II-->
+<node nodeId="1" name="thymio-II">#Filename: storeLocation.aesl
+#Goal: Store the location of the robot with a cartesian coordinate system
+#Name: Christopher Browne
+#Place: ETML, Lausanne
+#Note: ARRAYSIZE must be 1 lower than intended, because for loops only work with constants, and one can not substract this 1 loop iteration manually
+var state = OFF
+var nextState = STOP
+var counter = 0 #usefull for wait and rotate time
+var x = 0 #position on X axis
+var y = 0 #position on Y axis
+var direction = NORTH
+var distance = 0
+var positionX[ARRAYSIZE + 1]
+var positionY[ARRAYSIZE + 1]
+var rotation = 0
+var microLedIndicator = 0 #used to turn on/off an LED eveny 15°
+var macroLedIndicator = 0 #used to turn on/off an LED every 45°
+var circleLedState[8]
+var proxLedState[8]
+
+var positionXandY[] = [positionX,positionY]
+
+var i = 0
+
+#######################################
+	
+#changes value of "direction", when robot turns
+sub getDirection
+	if state == ROTATECW then
+		if direction &lt; 3 then
+			direction++
+		elseif direction == 3 then
+			direction = 0
+		end
+	elseif state == ROTATECCW then
+		if direction > 0 then
+			direction--
+		elseif direction == 0 then
+			direction = 3
+		end
+	end
+	
+#changes value of "distance" when robot has finished going forward
+sub getXAndY
+	if direction == NORTH then
+		y += distance
+	elseif direction == EAST then
+		x += distance 
+	elseif direction == SOUTH then
+		y -= distance
+	elseif direction == WEST then
+		x -= distance
+	end
+	
+#writes values to SD card
+sub writeArrays
+	positionX[i] = x
+	positionY[i] = y
+	i++
+	positionXandY = [positionX,positionY]
+	call sd.open(1, ARRAYSIZE)
+	call sd.write(positionXandY, ARRAYSIZE + 1)
+	
+sub changeLedState
+	microLedIndicator = rotation
+	if microLedIndicator > 0 then
+		microLedIndicator = rotation % 3
+		macroLedIndicator = rotation / 3
+		microLedIndicator += 3
+		if microLedIndicator == 0 then
+			call leds.prox.h(0,0,0,0,0,0,0,0)
+		elseif microLedIndicator == 1 then
+			call leds.prox.h(0,0,0,0,LEDLOW,0,0,0)
+		elseif microLedIndicator == 2 then
+			call leds.prox.h(0,0,0,0,LEDLOW,LEDLOW,0,0)
+		end
+
+		#write array indicating which LEDs must be on or off
+		for i in 0:7 do
+			if i == macroLedIndicator or i == 0 then
+				circleLedState[i] = LEDLOW
+			else
+				circleLedState[i] = 0
+			end
+		end
+		call leds.circle(circleLedState[0],circleLedState[1],circleLedState[2],circleLedState[3],circleLedState[4],circleLedState[5],circleLedState[6],circleLedState[7])
+
+	elseif microLedIndicator &lt; 0 then
+		microLedIndicator = rotation % 3
+		macroLedIndicator = rotation / 3
+		if microLedIndicator == 0 then
+			call leds.prox.h(0,0,0,0,0,0,0,0)
+		elseif microLedIndicator == -1 then
+			call leds.prox.h(0,0,LEDLOW,0,0,0,0,0)
+		elseif microLedIndicator == -2 then
+			call leds.prox.h(0,LEDLOW,LEDLOW,0,0,0,0,0)
+		end
+		
+	end
+	
+sub goForward
+	call leds.circle(LEDLOW,LEDLOW,0,0,0,0,0,LEDLOW)
+	motor.left.target = FORWARDSPEED
+	motor.right.target = FORWARDSPEED
+	
+sub stop
+	call leds.circle(0,LEDLOW,0,LEDLOW,0,LEDLOW,0,LEDLOW)
+	motor.left.target = 0
+	motor.right.target = 0
+	
+#rotate 90° CW (clockwise)
+sub rotateCW
+	call leds.circle(0,LEDLOW,LEDLOW,LEDLOW,0,0,0,0)
+	motor.left.target = ROTATESPEED
+	motor.right.target = -ROTATESPEED
+	
+#rotate 90° CCW (counter-clockwise)
+sub rotateCCW
+	call leds.circle(0,0,0,0,0,LEDLOW,LEDLOW,LEDLOW)
+	motor.left.target = -ROTATESPEED
+	motor.right.target = ROTATESPEED
+	
+sub initialize
+	call sound.system(-1)
+	call leds.buttons(0,0,0,0)
+	call leds.top(0,0,0)
+	call leds.temperature(0,0)
+	call leds.prox.h(0,0,0,0,0,0,0,0)
+	call leds.prox.v(0,0)
+	call leds.rc(0)
+	call leds.sound(0)
+	call leds.circle(0,0,0,0,0,0,0,0)
+	call leds.bottom.left(0,0,0)
+	call leds.bottom.right(0,0,0)
+	call leds.prox.h(0,0,0,0,0,0,0,0)
+	timer.period[0] = FASTTIMER
+	timer.period[1] = SLOWTIMER
+	state = OFF
+	nextState = STOP
+	counter = 0
+	x = 0
+	y = 0
+	i = 0
+	direction = NORTH
+	distance = 0
+	for i in 0:ARRAYSIZE do
+		positionX[i] = 0
+		positionY[i] = 0
+	end
+	i = 0
+	rotation = 0
+	
+sub kill
+	callsub stop
+	call leds.circle(0,0,0,0,0,0,0,0)
+	state = OFF
+	
+#################################################
+
+onevent buttons
+	#when -> button does not get pushed many times
+	when button.center == 1 do
+		
+		if state == OFF then
+			callsub initialize
+			state = STOP
+		else
+			callsub kill
+		end
+		call leds.buttons(LEDHIGH, LEDHIGH, LEDHIGH, LEDHIGH)
+	end
+	
+	when button.forward == 1 do
+		call leds.buttons(LEDHIGH, LEDLOW, LEDLOW, LEDLOW)
+		if state != OFF then
+			state = GOFORWARD
+		end
+	end
+	
+	when button.right == 1 do
+		call leds.buttons(LEDLOW, LEDHIGH, LEDLOW, LEDLOW)
+		if state != STOP then
+			state = STOP
+		end
+		if rotation &lt; 12 then
+			rotation++
+		end
+		callsub changeLedState
+	end	
+	
+	when button.left == 1 do
+		call leds.buttons(LEDLOW, LEDLOW, LEDLOW, LEDHIGH)
+		if state != STOP then
+			state = STOP
+		end
+		if rotation > -12 then
+			rotation--
+		end
+		
+		callsub changeLedState
+	end
+	
+	when button.backward == 1 do
+		call leds.buttons(LEDLOW, LEDLOW, LEDHIGH, LEDLOW)
+		state = STOP
+	end
+	
+	when button.center == 0 and button.forward == 0 and button.right == 0 and button.backward == 0 and button.left == 0 do
+		call leds.buttons(LEDLOW, LEDLOW, LEDLOW, LEDLOW)
+	end
+	
+############################################
+
+#fast timer (~5ms)
+onevent timer0
+	when state == STOP do
+		callsub stop
+	end
+	
+	when state == WAIT or state == ROTATECW or state == ROTATECCW do
+		counter = 0
+	end
+	
+	when state == ROTATECW do
+		callsub rotateCW
+		callsub getDirection
+	end
+	
+	when state == ROTATECCW do
+		callsub rotateCCW
+		callsub getDirection
+	end
+	
+	when state == GOFORWARD do
+		callsub goForward
+	end
+	
+	when state != GOFORWARD do
+		callsub getXAndY
+		callsub writeArrays
+	end
+	
+############################################
+	
+	if state == ROTATECW then
+		counter++
+		when counter > ROTATECWTIME do
+			state = STOP
+		end
+	end
+	
+	if state == ROTATECCW then
+		counter++
+		 when counter > ROTATECCWTIME do
+		 	state = STOP
+		 end
+	end
+	
+#slow timer (~35ms)
+onevent timer1
+
+	when state == GOFORWARD do
+		distance = 0
+	end
+	
+	if state == GOFORWARD then
+		distance++
+	end</node>
+
+
+</network>

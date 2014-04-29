@@ -13,14 +13,14 @@
 <constant value="4" name="ROTATECW"/>
 <constant value="5" name="ROTATECCW"/>
 <constant value="5" name="FASTTIMER"/>
-<constant value="33" name="SLOWTIMER"/>
-<constant value="100" name="FORWARDSPEED"/>
+<constant value="35" name="SLOWTIMER"/>
+<constant value="88" name="FORWARDSPEED"/>
 <constant value="60" name="ROTATESPEED"/>
 <constant value="1" name="LEDLOW"/>
 <constant value="8" name="LEDHIGH"/>
 <constant value="75" name="WAITIME"/>
-<constant value="761" name="ROTATECWTIME"/>
-<constant value="785" name="ROTATECCWTIME"/>
+<constant value="848" name="ROTATECWTIME"/>
+<constant value="880" name="ROTATECCWTIME"/>
 <constant value="0" name="NORTH"/>
 <constant value="1" name="EAST"/>
 <constant value="2" name="SOUTH"/>
@@ -41,8 +41,8 @@
 var state = OFF
 var nextState = STOP
 var counter = 0 #usefull for wait and rotate time
-var x = 0
-var y = 0
+var x = 0 #position on X axis
+var y = 0 #position on Y axis
 var direction = NORTH
 var distance = 0
 var positionX[ARRAYSIZE + 1]
@@ -54,6 +54,7 @@ var i = 0
 
 #######################################
 	
+#changes value of "direction", when robot turns
 sub getDirection
 	if state == ROTATECW then
 		if direction &lt; 3 then
@@ -69,6 +70,7 @@ sub getDirection
 		end
 	end
 	
+#changes value of "distance" when robot has finished going forward
 sub getXAndY
 	if direction == NORTH then
 		y += distance
@@ -80,6 +82,7 @@ sub getXAndY
 		x -= distance
 	end
 	
+#writes values to SD card
 sub writeArrays
 	positionX[i] = x
 	positionY[i] = y
@@ -244,7 +247,7 @@ onevent timer0
 		 end
 	end
 	
-#slow timer (~33ms)
+#slow timer (~35ms)
 onevent timer1
 
 	when state == GOFORWARD do

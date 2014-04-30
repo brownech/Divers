@@ -25,7 +25,8 @@
 <constant value="1" name="EAST"/>
 <constant value="2" name="SOUTH"/>
 <constant value="3" name="WEST"/>
-<constant value="49" name="ARRAYSIZE"/>
+<constant value="49" name="MAXPOSITIONINDEX"/>
+<constant value="7" name="MAXLEDINDEX"/>
 
 
 <!--show keywords state-->
@@ -45,13 +46,13 @@ var x = 0 #position on X axis
 var y = 0 #position on Y axis
 var direction = NORTH
 var distance = 0
-var positionX[ARRAYSIZE + 1]
-var positionY[ARRAYSIZE + 1]
+var positionX[MAXPOSITIONINDEX + 1]
+var positionY[MAXPOSITIONINDEX + 1]
 var rotation = 0
 var microLedIndicator = 0 #used to turn on/off an LED eveny 15°
 var macroLedIndicator = 0 #used to turn on/off an LED every 45°
-var circleLedState[8]
-var proxLedState[8]
+var circleLedState[MAXLEDINDEX + 1]
+var proxLedState[MAXLEDINDEX + 1]
 
 var positionXandY[] = [positionX,positionY]
 
@@ -93,8 +94,8 @@ sub writeArrays
 	positionY[i] = y
 	i++
 	positionXandY = [positionX,positionY]
-	call sd.open(1, ARRAYSIZE)
-	call sd.write(positionXandY, ARRAYSIZE + 1)
+	call sd.open(1, MAXPOSITIONINDEX)
+	call sd.write(positionXandY, MAXPOSITIONINDEX + 1)
 	
 sub changeLedState
 	microLedIndicator = rotation
@@ -102,34 +103,52 @@ sub changeLedState
 		microLedIndicator = rotation % 3
 		macroLedIndicator = rotation / 3
 		microLedIndicator += 3
-		if microLedIndicator == 0 then
-			call leds.prox.h(0,0,0,0,0,0,0,0)
-		elseif microLedIndicator == 1 then
-			call leds.prox.h(0,0,0,0,LEDLOW,0,0,0)
-		elseif microLedIndicator == 2 then
-			call leds.prox.h(0,0,0,0,LEDLOW,LEDLOW,0,0)
-		end
 
 		#write array indicating which LEDs must be on or off
-		for i in 0:7 do
+		for i in 0:MAXLEDINDEX do
+			#calculates which prox LEDs must be on (every 15°)
+			if i &lt;= 3 then
+				proxLedState[i] = 0
+			elseif i &lt;= microLedIndicator then
+				proxLedState[i] = LEDLOW
+			else
+				proxLedState[i] = 0
+			end
+			#calculates which circle LEDs must be on (every 45°)
 			if i == macroLedIndicator or i == 0 then
 				circleLedState[i] = LEDLOW
 			else
 				circleLedState[i] = 0
 			end
 		end
+		
 		call leds.circle(circleLedState[0],circleLedState[1],circleLedState[2],circleLedState[3],circleLedState[4],circleLedState[5],circleLedState[6],circleLedState[7])
+		call leds.prox.h(proxLedState[0],proxLedState[1],proxLedState[2],proxLedState[3],proxLedState[4],proxLedState[5],proxLedState[6],proxLedState[7])
 
 	elseif microLedIndicator &lt; 0 then
 		microLedIndicator = rotation % 3
 		macroLedIndicator = rotation / 3
+		
+		
+		#if microLedIndicator == 0 then
+		#	call leds.prox.h(0,0,0,0,0,0,0,0)
+		#elseif microLedIndicator == -1 then
+		#	call leds.prox.h(0,LEDLOW,0,0,0,0,0,0)
+		#elseif microLedIndicator == -2 then
+		#	call leds.prox.h(LEDLOW,LEDLOW,0,0,0,0,0,0)
+		#end
+		
+		#microLedIndicator += 3
+		
+
 		if microLedIndicator == 0 then
-			call leds.prox.h(0,0,0,0,0,0,0,0)
+			proxLedState = [0,0,0,0,0,0,0,0]
 		elseif microLedIndicator == -1 then
-			call leds.prox.h(0,0,LEDLOW,0,0,0,0,0)
+			proxLedState = [0,LEDLOW,0,0,0,0,0,0]
 		elseif microLedIndicator == -2 then
-			call leds.prox.h(0,LEDLOW,LEDLOW,0,0,0,0,0)
+			proxLedState = [LEDLOW,LEDLOW,0,0,0,0,0,0]
 		end
+
 		
 	end
 	
@@ -178,7 +197,7 @@ sub initialize
 	i = 0
 	direction = NORTH
 	distance = 0
-	for i in 0:ARRAYSIZE do
+	for i in 0:MAXPOSITIONINDEX do
 		positionX[i] = 0
 		positionY[i] = 0
 	end

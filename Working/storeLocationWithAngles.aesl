@@ -19,14 +19,16 @@
 <constant value="1" name="LEDLOW"/>
 <constant value="8" name="LEDHIGH"/>
 <constant value="75" name="WAITIME"/>
-<constant value="848" name="ROTATECWTIME"/>
-<constant value="880" name="ROTATECCWTIME"/>
+<constant value="131" name="ROTATECWTIME"/>
+<constant value="140" name="ROTATECCWTIME"/>
 <constant value="0" name="NORTH"/>
 <constant value="1" name="EAST"/>
 <constant value="2" name="SOUTH"/>
 <constant value="3" name="WEST"/>
 <constant value="49" name="MAXPOSITIONINDEX"/>
 <constant value="7" name="MAXLEDINDEX"/>
+<constant value="3" name="MAXBTNLEDINDEX"/>
+<constant value="250" name="MAXDISTANCE"/>
 
 
 <!--show keywords state-->
@@ -44,19 +46,26 @@ var nextState = STOP
 var counter = 0 #usefull for wait and rotate time
 var x = 0 #position on X axis
 var y = 0 #position on Y axis
+var sin = 0
+var cos = 0
 var direction = NORTH
 var distance = 0
 var positionX[MAXPOSITIONINDEX + 1]
 var positionY[MAXPOSITIONINDEX + 1]
 var rotation = 0
+var totalRotation = 0
 var microLedIndicator = 0 #used to turn on/off an LED eveny 15°
 var macroLedIndicator = 0 #used to turn on/off an LED every 45°
 var circleLedState[MAXLEDINDEX + 1]
 var proxLedState[MAXLEDINDEX + 1]
+var buttonLedState[MAXBTNLEDINDEX + 1]
+var sinCosDivFactor = 32767 / MAXDISTANCE
+var sinCosMultiplyFactor = 32767 / 12
 
 var positionXandY[] = [positionX,positionY]
 
 var i = 0
+var j = 0
 
 #######################################
 	
@@ -78,6 +87,7 @@ sub getDirection
 	
 #changes value of "distance" when robot has finished going forward
 sub getXAndY
+	#*
 	if direction == NORTH then
 		y += distance
 	elseif direction == EAST then
@@ -87,19 +97,33 @@ sub getXAndY
 	elseif direction == WEST then
 		x -= distance
 	end
+	*#
+	
+	call math.sin(sin, totalRotation * sinCosMultiplyFactor )
+	sin /= MAXDISTANCE
+	x += distance * sin / sinCosDivFactor
+	
+	call math.cos(cos, totalRotation * sinCosMultiplyFactor)
+	cos /= MAXDISTANCE
+	y += distance * cos /sinCosDivFactor
 	
 #writes values to SD card
 sub writeArrays
-	positionX[i] = x
-	positionY[i] = y
-	i++
+	positionX[j] = x
+	positionY[j] = y
+	j++
 	positionXandY = [positionX,positionY]
 	call sd.open(1, MAXPOSITIONINDEX)
 	call sd.write(positionXandY, MAXPOSITIONINDEX + 1)
 	
-sub changeLedState
+sub changeCircleLedState
+	call leds.circle(circleLedState[0],circleLedState[1],circleLedState[2],circleLedState[3],circleLedState[4],circleLedState[5],circleLedState[6],circleLedState[7])
+	
+sub setLedStateArray
 	microLedIndicator = rotation
 	if microLedIndicator > 0 then
+	
+		#next 3 instructions are used to set array values for LED state
 		microLedIndicator = rotation % 3
 		macroLedIndicator = rotation / 3
 		microLedIndicator += 3
@@ -121,25 +145,13 @@ sub changeLedState
 				circleLedState[i] = 0
 			end
 		end
-		
-		call leds.circle(circleLedState[0],circleLedState[1],circleLedState[2],circleLedState[3],circleLedState[4],circleLedState[5],circleLedState[6],circleLedState[7])
-		call leds.prox.h(proxLedState[0],proxLedState[1],proxLedState[2],proxLedState[3],proxLedState[4],proxLedState[5],proxLedState[6],proxLedState[7])
 
 	elseif microLedIndicator &lt; 0 then
+	
+		#next 3 instructions are used to set array values for LED state
 		microLedIndicator = rotation % 3
 		macroLedIndicator = rotation / 3
-		
-		
-		#if microLedIndicator == 0 then
-		#	call leds.prox.h(0,0,0,0,0,0,0,0)
-		#elseif microLedIndicator == -1 then
-		#	call leds.prox.h(0,LEDLOW,0,0,0,0,0,0)
-		#elseif microLedIndicator == -2 then
-		#	call leds.prox.h(LEDLOW,LEDLOW,0,0,0,0,0,0)
-		#end
-		
-		#microLedIndicator += 3
-		
+		macroLedIndicator += 8
 
 		if microLedIndicator == 0 then
 			proxLedState = [0,0,0,0,0,0,0,0]
@@ -148,45 +160,64 @@ sub changeLedState
 		elseif microLedIndicator == -2 then
 			proxLedState = [LEDLOW,LEDLOW,0,0,0,0,0,0]
 		end
-
 		
+		for i in 0:MAXLEDINDEX do
+			if i == 0 then
+				circleLedState[i] = LEDLOW
+			elseif i == macroLedIndicator then
+				circleLedState[i] = LEDLOW
+			else
+				circleLedState[i] = 0
+			end
+		end
+	
+	#if microLedIndicator == 0
+	else
+		proxLedState = [0,0,0,0,0,0,0,0]
+		circleLedState = [LEDHIGH,0,0,0,0,0,0,0]
 	end
 	
+	callsub changeCircleLedState
+	call leds.prox.h(proxLedState[0],proxLedState[1],proxLedState[2],proxLedState[3],proxLedState[4],proxLedState[5],proxLedState[6],proxLedState[7])
+	
 sub goForward
-	call leds.circle(LEDLOW,LEDLOW,0,0,0,0,0,LEDLOW)
+	#call leds.circle(LEDLOW,LEDLOW,0,0,0,0,0,LEDLOW)
+	circleLedState = [LEDLOW,LEDLOW,0,0,0,0,0,LEDLOW]
 	motor.left.target = FORWARDSPEED
 	motor.right.target = FORWARDSPEED
 	
 sub stop
-	call leds.circle(0,LEDLOW,0,LEDLOW,0,LEDLOW,0,LEDLOW)
+	#call leds.circle(0,LEDLOW,0,LEDLOW,0,LEDLOW,0,LEDLOW)
+	circleLedState = [0,LEDLOW,0,LEDLOW,0,LEDLOW,0,LEDLOW]
 	motor.left.target = 0
 	motor.right.target = 0
 	
 #rotate 90° CW (clockwise)
 sub rotateCW
-	call leds.circle(0,LEDLOW,LEDLOW,LEDLOW,0,0,0,0)
+	#call leds.circle(0,LEDLOW,LEDLOW,LEDLOW,0,0,0,0)
+	circleLedState = [0,LEDLOW,LEDLOW,LEDLOW,0,0,0,0]
 	motor.left.target = ROTATESPEED
 	motor.right.target = -ROTATESPEED
 	
 #rotate 90° CCW (counter-clockwise)
 sub rotateCCW
-	call leds.circle(0,0,0,0,0,LEDLOW,LEDLOW,LEDLOW)
+	#call leds.circle(0,0,0,0,0,LEDLOW,LEDLOW,LEDLOW)
+	circleLedState = [0,0,0,0,0,LEDLOW,LEDLOW,LEDLOW]
 	motor.left.target = -ROTATESPEED
 	motor.right.target = ROTATESPEED
 	
 sub initialize
 	call sound.system(-1)
 	call leds.buttons(0,0,0,0)
-	call leds.top(0,0,0)
-	call leds.temperature(0,0)
+	#call leds.top(0,0,0)
+	#call leds.temperature(0,0)
 	call leds.prox.h(0,0,0,0,0,0,0,0)
 	call leds.prox.v(0,0)
-	call leds.rc(0)
-	call leds.sound(0)
+	#call leds.rc(0)
+	#call leds.sound(0)
 	call leds.circle(0,0,0,0,0,0,0,0)
-	call leds.bottom.left(0,0,0)
-	call leds.bottom.right(0,0,0)
-	call leds.prox.h(0,0,0,0,0,0,0,0)
+	#call leds.bottom.left(0,0,0)
+	#call leds.bottom.right(0,0,0)
 	timer.period[0] = FASTTIMER
 	timer.period[1] = SLOWTIMER
 	state = OFF
@@ -202,11 +233,16 @@ sub initialize
 		positionY[i] = 0
 	end
 	i = 0
+	j = 0
 	rotation = 0
+	totalRotation = 0
+	sin = 0
+	cos = 0
 	
 sub kill
 	callsub stop
-	call leds.circle(0,0,0,0,0,0,0,0)
+	circleLedState = [0,0,0,0,0,0,0,0]
+	callsub changeCircleLedState
 	state = OFF
 	
 #################################################
@@ -214,36 +250,50 @@ sub kill
 onevent buttons
 	#when -> button does not get pushed many times
 	when button.center == 1 do
+	
+		buttonLedState = [LEDHIGH,LEDHIGH,LEDHIGH,LEDHIGH]
 		
 		if state == OFF then
 			callsub initialize
 			state = STOP
 		else
 			callsub kill
-		end
-		call leds.buttons(LEDHIGH, LEDHIGH, LEDHIGH, LEDHIGH)
+		end	
 	end
 	
 	when button.forward == 1 do
-		call leds.buttons(LEDHIGH, LEDLOW, LEDLOW, LEDLOW)
+	
+		buttonLedState = [LEDHIGH, LEDLOW, LEDLOW, LEDLOW]
+		
 		if state != OFF then
-			state = GOFORWARD
+			if rotation == 0 then
+				state = GOFORWARD
+			elseif rotation > 0 then
+				state = ROTATECW
+			else
+				state = ROTATECCW
+			end
 		end
 	end
 	
 	when button.right == 1 do
-		call leds.buttons(LEDLOW, LEDHIGH, LEDLOW, LEDLOW)
+	
+		buttonLedState = [LEDLOW, LEDHIGH, LEDLOW, LEDLOW]
+		
 		if state != STOP then
 			state = STOP
 		end
 		if rotation &lt; 12 then
 			rotation++
 		end
-		callsub changeLedState
+		
+		callsub setLedStateArray
 	end	
 	
 	when button.left == 1 do
-		call leds.buttons(LEDLOW, LEDLOW, LEDLOW, LEDHIGH)
+	
+		buttonLedState = [LEDLOW, LEDLOW, LEDLOW, LEDHIGH]
+		
 		if state != STOP then
 			state = STOP
 		end
@@ -251,17 +301,22 @@ onevent buttons
 			rotation--
 		end
 		
-		callsub changeLedState
+		callsub setLedStateArray
 	end
 	
 	when button.backward == 1 do
-		call leds.buttons(LEDLOW, LEDLOW, LEDHIGH, LEDLOW)
+	
+		buttonLedState = [LEDLOW, LEDLOW, LEDHIGH, LEDLOW]
 		state = STOP
 	end
 	
 	when button.center == 0 and button.forward == 0 and button.right == 0 and button.backward == 0 and button.left == 0 do
-		call leds.buttons(LEDLOW, LEDLOW, LEDLOW, LEDLOW)
+	
+		buttonLedState = [LEDLOW, LEDLOW, LEDLOW, LEDLOW]
 	end
+	
+	#change LED state corresponding to previously assigned array
+	call leds.buttons(buttonLedState[0],buttonLedState[1],buttonLedState[2],buttonLedState[3])
 	
 ############################################
 
@@ -269,6 +324,7 @@ onevent buttons
 onevent timer0
 	when state == STOP do
 		callsub stop
+		callsub changeCircleLedState
 	end
 	
 	when state == WAIT or state == ROTATECW or state == ROTATECCW do
@@ -278,35 +334,49 @@ onevent timer0
 	when state == ROTATECW do
 		callsub rotateCW
 		callsub getDirection
+		callsub changeCircleLedState
+		totalRotation += rotation
 	end
 	
 	when state == ROTATECCW do
 		callsub rotateCCW
 		callsub getDirection
+		callsub changeCircleLedState
+		totalRotation += rotation
 	end
 	
 	when state == GOFORWARD do
 		callsub goForward
+		callsub changeCircleLedState
 	end
 	
 	when state != GOFORWARD do
 		callsub getXAndY
 		callsub writeArrays
+		#totalRotation = 0
 	end
 	
 ############################################
 	
 	if state == ROTATECW then
 		counter++
-		when counter > ROTATECWTIME do
+		
+		#ROTATECWTIME is time necessary to rotate 15°
+		when counter >= ROTATECWTIME * rotation do
 			state = STOP
+			rotation = 0
+			callsub setLedStateArray
 		end
 	end
 	
 	if state == ROTATECCW then
 		counter++
-		 when counter > ROTATECCWTIME do
+		
+		#ROTATECCWTIME is time necessary to rotate 15°
+		 when counter > ROTATECCWTIME * -rotation do
 		 	state = STOP
+		 	rotation = 0
+		 	callsub setLedStateArray
 		 end
 	end
 	
